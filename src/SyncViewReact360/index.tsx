@@ -1,10 +1,11 @@
 import { Viewer } from '@photo-sphere-viewer/core';
-import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
+import { PlanPlugin } from '@photo-sphere-viewer/plan-plugin';
+import { VirtualTourPlugin } from '@photo-sphere-viewer/virtual-tour-plugin';
 import { Button, Space, Switch, Typography } from 'antd';
 import { memo, useEffect, useRef } from 'react';
 import { useToggle } from 'react-use';
 
-const SyncViewSphere = ({ data }) => {
+const SyncViewSphere = ({ data, images }) => {
   const [locked, toggleLock] = useToggle(false);
   const [isCompare, toggleCompare] = useToggle(false);
 
@@ -15,7 +16,7 @@ const SyncViewSphere = ({ data }) => {
         <Typography.Text>Compare mode</Typography.Text>
       </Space>
       <div style={{ position: 'relative' }}>
-        <SyncView data={data} locked={locked} isCompare={isCompare} />
+        <SyncView data={data} locked={locked} isCompare={isCompare} images={images} />
 
         {isCompare && (
           <Button
@@ -36,7 +37,7 @@ const SyncViewSphere = ({ data }) => {
   );
 };
 
-const SyncView = ({ data, locked, isCompare }) => {
+const SyncView = ({ data, locked, isCompare, images }) => {
   const viewer1Ref = useRef<Viewer | null>(null);
   const viewer2Ref = useRef<Viewer | null>(null);
   const container1Ref = useRef<HTMLDivElement | null>(null);
@@ -44,25 +45,33 @@ const SyncView = ({ data, locked, isCompare }) => {
 
   const plugins: any = [
     [
-      MarkersPlugin,
+      PlanPlugin,
       {
-        markers: [
-          ...data.customHotspots.map((marker, index) => ({
-            id: `marker-${index}`,
-            position: { yaw: marker.yaw, pitch: marker.pitch },
-            image: marker.icon,
-            size: { width: 60, height: 60 },
-            tooltip: {
-              content: marker.transition,
-              position: 'center',
-            },
-          })),
+        defaultZoom: 14,
+        coordinates: [694, 50],
+        bearing: '-90deg',
+        size: {
+          width: '180px',
+          height: '260px',
+        },
+        layers: [
+          {
+            name: 'Floor map',
+            urlTemplate:
+              'https://appcenter-missions-dev.s3.ap-southeast-1.amazonaws.com/blk-resorts-world-sentosa/rws_internal_inspection_11042024-festive_walk_-_escalator_-_no2_ZuQyrmZX9vSW/floorplan/elevation_diagram.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYPUGVDNQLX6SNJNQ%2F20240819%2Fap-southeast-1%2Fs3%2Faws4_request&X-Amz-Date=20240819T085854Z&X-Amz-Expires=28000&X-Amz-Signature=abb98a03b247625ac4cc251e5aab6a87989ae548914535185aeffff5e1258f21&X-Amz-SignedHeaders=host',
+          },
         ],
+      },
+    ],
+    [
+      VirtualTourPlugin,
+      {
+        positionMode: 'manual',
       },
     ],
   ];
 
-  const syncViewers = (sourceViewer, targetViewer) => {
+  const syncViewers = (sourceViewer: Viewer | null, targetViewer: Viewer | null) => {
     if (!locked || !sourceViewer || !targetViewer) return;
     targetViewer.rotate({
       pitch: sourceViewer.getPosition().pitch,
@@ -76,16 +85,46 @@ const SyncView = ({ data, locked, isCompare }) => {
     if (container1Ref.current) {
       const viewer = new Viewer({
         container: container1Ref.current,
-        panorama: data.url,
         plugins: plugins,
         zoomSpeed: 50,
       });
+      // const planPlugin = viewer.getPlugin(PlanPlugin);
+      const virtualTour: any = viewer.getPlugin(VirtualTourPlugin);
+      const nodes = images.map((image, index) => {
+        const hotspot = image.customHotspots[0];
+        const currentNodeId = `image-${index}`;
+        const nextNodeId = index >= images.length - 1 ? `image-0` : `image-${index + 1}`;
+
+        return {
+          id: currentNodeId,
+          panorama: image.url,
+          thumbnail: image.url,
+          name: currentNodeId,
+          caption: currentNodeId,
+          links: [
+            {
+              nodeId: nextNodeId,
+              position: { yaw: hotspot.yaw, pitch: hotspot.pitch },
+            },
+          ],
+        };
+      });
+
+      virtualTour.setNodes(nodes);
+
+      // events
       viewer.addEventListener('position-updated', e => {
         syncViewers(viewer1Ref.current, viewer2Ref.current);
       });
       viewer.addEventListener('zoom-updated', e => {
         syncViewers(viewer1Ref.current, viewer2Ref.current);
       });
+      // planPlugin.addEventListener('view-changed', e => {
+      //   console.log(e);
+      // });
+      // planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
+      //   console.log('hotspotId', hotspotId);
+      // });
 
       viewer1Ref.current = viewer;
     }
@@ -96,7 +135,7 @@ const SyncView = ({ data, locked, isCompare }) => {
         viewer1Ref.current.destroy();
       }
     };
-  }, [data.url, locked]);
+  }, [images, locked]);
 
   // init viewer 2
   useEffect(() => {

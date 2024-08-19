@@ -2263,6 +2263,13 @@
   resolved "https://registry.yarnpkg.com/@photo-sphere-viewer/markers-plugin/-/markers-plugin-5.9.0.tgz#d07dbbbe74ee369a8c5a57d43817c9fb5ecce094"
   integrity sha512-jNy6avSp5v1WDqsRLWgaXfuNt8cF1EgvjqOv+M+J/BVbCJ2dMDpSM90vQWbNqnizTrrTse21u0+fkkfv7qiNcw==
 
+"@photo-sphere-viewer/plan-plugin@^5.9.0":
+  version "5.9.0"
+  resolved "https://registry.yarnpkg.com/@photo-sphere-viewer/plan-plugin/-/plan-plugin-5.9.0.tgz#d52cf5d4c1a8a6eafe3129277729434c03226858"
+  integrity sha512-j98XsKZcFOroeESclIzK0CjVMXScX5xFd9Dy375RGOMXVdNBtkQxyoZ67fyjhAOTbmwWENwbjC8F7aToPWHPbg==
+  dependencies:
+    leaflet "^1.9.4"
+
 "@photo-sphere-viewer/virtual-tour-plugin@^5.9.0":
   version "5.9.0"
   resolved "https://registry.yarnpkg.com/@photo-sphere-viewer/virtual-tour-plugin/-/virtual-tour-plugin-5.9.0.tgz#13d1b5a960cb8f7b52b85cb1f97cd42fd17fbc20"
@@ -10933,6 +10940,11 @@ lcid@^2.0.0:
   integrity sha512-avPEb8P8EGnwXKClwsNUgryVjllcRqtMYa49NTsbQagYuT1DcXnl1915oxWjoyGrXR6zH/Y0Zc96xWsPcoDKeA==
   dependencies:
     invert-kv "^2.0.0"
+
+leaflet@^1.9.4:
+  version "1.9.4"
+  resolved "https://registry.yarnpkg.com/leaflet/-/leaflet-1.9.4.tgz#23fae724e282fa25745aff82ca4d394748db7d8d"
+  integrity sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==
 
 left-pad@^1.3.0:
   version "1.3.0"

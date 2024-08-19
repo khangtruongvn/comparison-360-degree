@@ -1,41 +1,46 @@
 import { Viewer } from '@photo-sphere-viewer/core';
 import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
-import { Button } from 'antd';
-import React, { memo, useEffect, useRef } from 'react';
+import { Button, Space, Switch, Typography } from 'antd';
+import { memo, useEffect, useRef } from 'react';
 import { useToggle } from 'react-use';
 
 const SyncViewSphere = ({ data }) => {
   const [locked, toggleLock] = useToggle(false);
-
-  const handleToggleLock = () => {
-    toggleLock();
-  };
+  const [isCompare, toggleCompare] = useToggle(false);
 
   return (
-    <div style={{ display: 'flex', position: 'relative' }}>
-      <SyncView data={data} locked={locked} />
+    <>
+      <Space>
+        <Switch checked={isCompare} onChange={checked => toggleCompare(checked)} />
+        <Typography.Text>Compare mode</Typography.Text>
+      </Space>
+      <div style={{ position: 'relative' }}>
+        <SyncView data={data} locked={locked} isCompare={isCompare} />
 
-      <Button
-        type={locked ? 'primary' : 'default'}
-        onClick={handleToggleLock}
-        style={{
-          left: '50%',
-          top: '50%',
-          position: 'absolute',
-          transform: 'translate(-50%, -50%)',
-        }}
-      >
-        Lock screen
-      </Button>
-    </div>
+        {isCompare && (
+          <Button
+            type={locked ? 'primary' : 'default'}
+            onClick={toggleLock}
+            style={{
+              left: '50%',
+              top: '50%',
+              position: 'absolute',
+              transform: 'translate(-50%, -50%)',
+            }}
+          >
+            Lock screen
+          </Button>
+        )}
+      </div>
+    </>
   );
 };
 
-const SyncView = ({ data, locked }) => {
+const SyncView = ({ data, locked, isCompare }) => {
   const viewer1Ref = useRef<Viewer | null>(null);
   const viewer2Ref = useRef<Viewer | null>(null);
-  const container1Ref = useRef<any>(null);
-  const container2Ref = useRef<any>(null);
+  const container1Ref = useRef<HTMLDivElement | null>(null);
+  const container2Ref = useRef<HTMLDivElement | null>(null);
 
   const plugins: any = [
     [
@@ -95,36 +100,48 @@ const SyncView = ({ data, locked }) => {
 
   // init viewer 2
   useEffect(() => {
-    if (container2Ref.current) {
-      const viewer = new Viewer({
-        container: container2Ref.current,
-        panorama: data.url,
-        plugins: plugins,
-        zoomSpeed: 50,
-      });
-      viewer.addEventListener('position-updated', e => {
-        syncViewers(viewer2Ref.current, viewer1Ref.current);
-      });
-      viewer.addEventListener('zoom-updated', e => {
-        syncViewers(viewer2Ref.current, viewer1Ref.current);
-      });
+    if (isCompare) {
+      if (container2Ref.current) {
+        const viewer = new Viewer({
+          container: container2Ref.current,
+          panorama: data.url,
+          plugins: plugins,
+          zoomSpeed: 50,
+        });
+        viewer.addEventListener('position-updated', e => {
+          syncViewers(viewer2Ref.current, viewer1Ref.current);
+        });
+        viewer.addEventListener('zoom-updated', e => {
+          syncViewers(viewer2Ref.current, viewer1Ref.current);
+        });
 
-      viewer2Ref.current = viewer;
-    }
-
-    return () => {
-      if (viewer2Ref.current) {
-        console.log('destroy view2');
-        viewer2Ref.current.destroy();
+        viewer2Ref.current = viewer;
       }
-    };
-  }, [data.url, locked]);
+
+      return () => {
+        if (viewer2Ref.current?.destroy) {
+          console.log('destroy view2');
+          viewer2Ref.current.destroy();
+        }
+      };
+    }
+  }, [data.url, locked, isCompare]);
 
   return (
-    <React.Fragment>
-      <div ref={container1Ref} style={{ width: '50%', height: '100vh' }} />
-      <div ref={container2Ref} style={{ width: '50%', height: '100vh' }} />
-    </React.Fragment>
+    <div style={{ display: 'flex' }}>
+      <div
+        ref={container1Ref}
+        style={{
+          width: isCompare ? '50%' : '100%',
+          height: '80vh',
+          objectFit: 'contain',
+        }}
+      />
+      <div
+        ref={container2Ref}
+        style={{ width: isCompare ? '50%' : '0%', height: '80vh', objectFit: 'contain' }}
+      />
+    </div>
   );
 };
 

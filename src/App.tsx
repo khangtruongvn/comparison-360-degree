@@ -1,10 +1,12 @@
+import '@photo-sphere-viewer/core/index.css'; // Import default styles
 import '@photo-sphere-viewer/markers-plugin/index.css';
 import './App.css';
 import SyncViewSphere from './SyncViewReact360';
 
 const DUMMY_DATA = {
-  url: '',
-  thumbnail: '',
+  url: 'https://appcenter-missions-prod.s3.ap-southeast-1.amazonaws.com/blk-resorts-world-sentosa/rws_internal_inspection_11042024-festive_walk_-_escalator_-_no2_1DQYluEN5jgX2g/rws_II-festive_walk_escalator_no2/app_fi/360/rws_II-festive_walk_escalator_no2_0000.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYPUGVDNQLX6SNJNQ%2F20240816%2Fap-southeast-1%2Fs3%2Faws4_request&X-Amz-Date=20240816T034944Z&X-Amz-Expires=28000&X-Amz-Signature=63388f6653668c9caa1abf204ae70740df3742015ee43feb1316211a3afb192f&X-Amz-SignedHeaders=host',
+  thumbnail:
+    's3://appcenter-missions-prod/blk-resorts-world-sentosa/rws_internal_inspection_11042024-festive_walk_-_escalator_-_no2_1DQYluEN5jgX2g/rws_II-festive_walk_escalator_no2/app_fi/thumbnails/rws_II-festive_walk_escalator_no2_0000.jpg',
   image_name: 'rws_II-festive_walk_escalator_no2_0000.jpg',
   camera_model: 'Non-drone',
   exif_image_width: 6144,
@@ -18,16 +20,16 @@ const DUMMY_DATA = {
   defect: [],
   customHotspots: [
     {
-      pitch: 100,
-      yaw: 100,
-      transition: 'rws_II-festive_walk_escalator_no2_0064',
+      pitch: -41.13850516150747,
+      yaw: -11.203644701584569,
+      transition: '',
       type: 'custom',
       icon: '/images/icons/exist.svg',
     },
     {
       pitch: -53.29305528794916,
       yaw: -14.889460147824451,
-      transition: 'rws_II-festive_walk_escalator_no2_0000',
+      transition: '',
       type: 'custom',
       icon: '/images/icons/exist-back.svg',
     },

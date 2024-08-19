@@ -1,50 +1,41 @@
+import { Viewer } from '@photo-sphere-viewer/core';
 import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
-import { Button, Spin } from 'antd';
-import { forwardRef, memo, useEffect, useRef, useState } from 'react';
-import { ReactPhotoSphereViewer } from 'react-photo-sphere-viewer';
+import { Button } from 'antd';
+import React, { memo, useEffect, useRef } from 'react';
 import { useToggle } from 'react-use';
 
 const SyncViewSphere = ({ data }) => {
-  const [key, setKey] = useState(0);
-  const [locked, toggleLock] = useToggle(true);
-  const [loading, toggleLoading] = useToggle(false);
+  const [locked, toggleLock] = useToggle(false);
 
   const handleToggleLock = () => {
-    toggleLoading();
-    setTimeout(() => {
-      toggleLock();
-      toggleLoading();
-      setKey(prev => prev + 1);
-    }, 500);
+    toggleLock();
   };
 
   return (
-    <>
-      <Spin spinning={loading}>
-        <div style={{ display: 'flex', position: 'relative' }}>
-          <SyncView data={data} locked={locked} key={key} />
+    <div style={{ display: 'flex', position: 'relative' }}>
+      <SyncView data={data} locked={locked} />
 
-          <Button
-            type={locked ? 'primary' : 'default'}
-            onClick={handleToggleLock}
-            style={{
-              left: '50%',
-              top: '50%',
-              position: 'absolute',
-              transform: 'translate(-50%, -50%)',
-            }}
-          >
-            Lock screen
-          </Button>
-        </div>
-      </Spin>
-    </>
+      <Button
+        type={locked ? 'primary' : 'default'}
+        onClick={handleToggleLock}
+        style={{
+          left: '50%',
+          top: '50%',
+          position: 'absolute',
+          transform: 'translate(-50%, -50%)',
+        }}
+      >
+        Lock screen
+      </Button>
+    </div>
   );
 };
 
 const SyncView = ({ data, locked }) => {
-  const viewer1Ref = useRef<any>(null);
-  const viewer2Ref = useRef<any>(null);
+  const viewer1Ref = useRef<Viewer | null>(null);
+  const viewer2Ref = useRef<Viewer | null>(null);
+  const container1Ref = useRef<any>(null);
+  const container2Ref = useRef<any>(null);
 
   const plugins: any = [
     [
@@ -75,47 +66,66 @@ const SyncView = ({ data, locked }) => {
     targetViewer.zoom(sourceViewer.getZoomLevel());
   };
 
+  // init viewer 1
   useEffect(() => {
+    if (container1Ref.current) {
+      const viewer = new Viewer({
+        container: container1Ref.current,
+        panorama: data.url,
+        plugins: plugins,
+        zoomSpeed: 50,
+      });
+      viewer.addEventListener('position-updated', e => {
+        syncViewers(viewer1Ref.current, viewer2Ref.current);
+      });
+      viewer.addEventListener('zoom-updated', e => {
+        syncViewers(viewer1Ref.current, viewer2Ref.current);
+      });
+
+      viewer1Ref.current = viewer;
+    }
+
     return () => {
-      viewer1Ref.current?.destroy();
-      viewer2Ref.current?.destroy();
+      if (viewer1Ref.current) {
+        console.log('destroy view1');
+        viewer1Ref.current.destroy();
+      }
     };
-  }, []);
+  }, [data.url, locked]);
+
+  // init viewer 2
+  useEffect(() => {
+    if (container2Ref.current) {
+      const viewer = new Viewer({
+        container: container2Ref.current,
+        panorama: data.url,
+        plugins: plugins,
+        zoomSpeed: 50,
+      });
+      viewer.addEventListener('position-updated', e => {
+        syncViewers(viewer2Ref.current, viewer1Ref.current);
+      });
+      viewer.addEventListener('zoom-updated', e => {
+        syncViewers(viewer2Ref.current, viewer1Ref.current);
+      });
+
+      viewer2Ref.current = viewer;
+    }
+
+    return () => {
+      if (viewer2Ref.current) {
+        console.log('destroy view2');
+        viewer2Ref.current.destroy();
+      }
+    };
+  }, [data.url, locked]);
 
   return (
-    <>
-      <Viewer
-        url={data.url}
-        ref={viewer1Ref}
-        plugins={plugins}
-        syncViewers={() => syncViewers(viewer1Ref.current, viewer2Ref.current)}
-      />
-
-      <Viewer
-        url={data.url}
-        ref={viewer2Ref}
-        plugins={plugins}
-        syncViewers={() => syncViewers(viewer2Ref.current, viewer1Ref.current)}
-      />
-    </>
+    <React.Fragment>
+      <div ref={container1Ref} style={{ width: '50%', height: '100vh' }} />
+      <div ref={container2Ref} style={{ width: '50%', height: '100vh' }} />
+    </React.Fragment>
   );
 };
-
-const Viewer = forwardRef<any, any>(({ url, syncViewers, plugins }, ref) => {
-  console.log('ref', ref);
-  return (
-    <ReactPhotoSphereViewer
-      defaultZoomLvl={0}
-      zoomSpeed={50}
-      ref={ref}
-      src={url}
-      height={'100vh'}
-      width={'50%'}
-      plugins={plugins}
-      onPositionChange={syncViewers}
-      onZoomChange={syncViewers}
-    ></ReactPhotoSphereViewer>
-  );
-});
 
 export default memo(SyncViewSphere);

@@ -1,9 +1,10 @@
 import { Viewer } from '@photo-sphere-viewer/core';
 import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
 import { PlanPlugin } from '@photo-sphere-viewer/plan-plugin';
-import { App, Row, Space, Typography } from 'antd';
+import { App } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CreateDefectForm from '../CreateDefectForm';
+import DefectDetail from '../DefectDetail';
 
 const SyncView = ({ locked, isCompare, images }) => {
   const { modal } = App.useApp();
@@ -123,24 +124,61 @@ const SyncView = ({ locked, isCompare, images }) => {
   ];
 
   const handleOnOk = (values: any) => {
-    if (!viewer1Ref.current) return;
-    const viewer = viewer1Ref.current;
-    const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+    try {
+      try {
+        if (viewer1Ref.current) {
+          const viewer = viewer1Ref.current;
+          const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+          markersPlugin.removeMarker(newMarkerId);
+        }
+      } catch (error: any) {
+        console.log(error);
+      }
 
-    console.log(values);
-    setOpen(false);
-    setNewMarkerId('');
-    markersPlugin.removeMarker(newMarkerId);
+      try {
+        if (viewer2Ref.current) {
+          const viewer = viewer2Ref.current;
+          const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+          markersPlugin.removeMarker(newMarkerId);
+        }
+      } catch (error: any) {
+        console.log(error);
+      }
+
+      console.log(values);
+      setOpen(false);
+      setNewMarkerId('');
+    } catch (error) {
+      console.log('error', error);
+    }
   };
 
   const handleOnCancel = () => {
-    if (!viewer1Ref.current) return;
-    const viewer = viewer1Ref.current;
-    const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+    try {
+      try {
+        if (viewer1Ref.current) {
+          const viewer = viewer1Ref.current;
+          const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+          markersPlugin.removeMarker(newMarkerId);
+        }
+      } catch (error: any) {
+        console.log(error);
+      }
 
-    setOpen(false);
-    setNewMarkerId('');
-    markersPlugin.removeMarker(newMarkerId);
+      try {
+        if (viewer2Ref.current) {
+          const viewer = viewer2Ref.current;
+          const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+          markersPlugin.removeMarker(newMarkerId);
+        }
+      } catch (error: any) {
+        console.log(error);
+      }
+      setOpen(false);
+      setNewMarkerId('');
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   // init viewer 1
@@ -179,10 +217,18 @@ const SyncView = ({ locked, isCompare, images }) => {
           size: { width: 38, height: 38 },
         });
 
-        setTimeout(() => {
-          setOpen(true);
-          setNewMarkerId(newDefectId);
-        }, 200);
+        if (viewer2Ref.current) {
+          const markersPlugin2: any = viewer2Ref.current?.getPlugin(MarkersPlugin);
+          markersPlugin2.addMarker({
+            id: newDefectId,
+            position: { yaw: data.yaw, pitch: data.pitch },
+            image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
+            size: { width: 38, height: 38 },
+          });
+        }
+
+        setOpen(true);
+        setNewMarkerId(newDefectId);
       });
       planPlugin.addEventListener('view-changed', e => {
         console.log('e.view', e.view);
@@ -194,21 +240,10 @@ const SyncView = ({ locked, isCompare, images }) => {
       markersPlugin.addEventListener('select-marker', ({ marker }) => {
         const defect = marker.config;
         modal.info({
+          width: 600,
           centered: true,
           title: `Defect ${defect.defect_id_elevation}`,
-          content: (
-            <Row>
-              <Space>
-                <Typography.Text strong>Defect severity</Typography.Text>
-                <Typography.Text>{defect.severity}</Typography.Text>
-              </Space>
-
-              <Space>
-                <Typography.Text strong>Component</Typography.Text>
-                <Typography.Text>{defect.component}</Typography.Text>
-              </Space>
-            </Row>
-          ),
+          content: <DefectDetail defect={defect} />,
         });
       });
 
@@ -249,6 +284,38 @@ const SyncView = ({ locked, isCompare, images }) => {
         });
         viewer.addEventListener('zoom-updated', e => {
           syncViewers(viewer2Ref.current, viewer1Ref.current);
+        });
+        viewer.addEventListener('click', ({ data }) => {
+          const newDefectId = `new-defect-${Date.now()}`;
+          markersPlugin.addMarker({
+            id: newDefectId,
+            position: { yaw: data.yaw, pitch: data.pitch },
+            image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
+            size: { width: 38, height: 38 },
+          });
+
+          if (viewer1Ref.current) {
+            const markersPlugin2: any = viewer1Ref.current?.getPlugin(MarkersPlugin);
+            markersPlugin2.addMarker({
+              id: newDefectId,
+              position: { yaw: data.yaw, pitch: data.pitch },
+              image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
+              size: { width: 38, height: 38 },
+            });
+          }
+
+          setOpen(true);
+          setNewMarkerId(newDefectId);
+        });
+
+        markersPlugin.addEventListener('select-marker', ({ marker }) => {
+          const defect = marker.config;
+          modal.info({
+            width: 600,
+            centered: true,
+            title: `Defect ${defect.defect_id_elevation}`,
+            content: <DefectDetail defect={defect} />,
+          });
         });
 
         viewer2Ref.current = viewer;

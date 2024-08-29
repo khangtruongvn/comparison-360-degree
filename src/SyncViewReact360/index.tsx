@@ -1,6 +1,5 @@
 import { Button, Space, Switch, Typography } from 'antd';
 import { useToggle } from 'react-use';
-import SyncView from '../components/SyncView';
 
 const SyncViewSphere = ({ data, images }) => {
   const [locked, toggleLock] = useToggle(false);
@@ -13,8 +12,6 @@ const SyncViewSphere = ({ data, images }) => {
         <Typography.Text>Compare mode</Typography.Text>
       </Space>
       <div style={{ position: 'relative' }}>
-        <SyncView data={data} locked={locked} isCompare={isCompare} images={images} />
-
         {isCompare && (
           <Button
             type={locked ? 'primary' : 'default'}

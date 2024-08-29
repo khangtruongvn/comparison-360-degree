@@ -1,16 +1,20 @@
 import { Viewer } from '@photo-sphere-viewer/core';
 import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
 import { PlanPlugin } from '@photo-sphere-viewer/plan-plugin';
-import { VirtualTourPlugin } from '@photo-sphere-viewer/virtual-tour-plugin';
-import { App, Input, Row, Space, Typography } from 'antd';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { App, Row, Space, Typography } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import CreateDefectForm from '../CreateDefectForm';
 
-const SyncView = ({ data, locked, isCompare, images }) => {
+const SyncView = ({ locked, isCompare, images }) => {
   const { modal } = App.useApp();
   const viewer1Ref = useRef<Viewer | null>(null);
   const viewer2Ref = useRef<Viewer | null>(null);
   const container1Ref = useRef<HTMLDivElement | null>(null);
   const container2Ref = useRef<HTMLDivElement | null>(null);
+
+  const [currentIndexImage] = useState<number>(0);
+  const [open, setOpen] = useState<boolean>(false);
+  const [newMarkerId, setNewMarkerId] = useState<string>('');
 
   const syncViewers = (sourceViewer: Viewer | null, targetViewer: Viewer | null) => {
     if (!locked || !sourceViewer || !targetViewer) return;
@@ -21,17 +25,27 @@ const SyncView = ({ data, locked, isCompare, images }) => {
     targetViewer.zoom(sourceViewer.getZoomLevel());
   };
 
+  const getDefectIcon = useCallback(severity => {
+    switch (severity) {
+      case 'Safe':
+        return '/images/icons/safe.svg';
+      case 'Unsafe':
+        return '/images/icons/unsafe.svg';
+      case 'Require Repair':
+        return '/images/icons/require_repair.svg';
+      default:
+        return '';
+    }
+  }, []);
+
   const detectInformation = useCallback((images: any[]) => {
     const nodes: any = [];
     const hotspots: any[] = [];
-    const defectMarkers: any[] = [];
 
     const nodeMap = new Map();
     const hotspotMap = new Map();
-    const defectMarkerMap = new Map();
 
     images.forEach((image, index) => {
-      const hotspot = image.customHotspots[0];
       const currentNodeId = `node-${index}`;
       const currentHotspotId = `hotspot-${index}`;
 
@@ -60,8 +74,8 @@ const SyncView = ({ data, locked, isCompare, images }) => {
             ...defect,
             id: currentMarkerId,
             position: { yaw: defect.yaw, pitch: defect.pitch },
-            image: 'https://photo-sphere-viewer-data.netlify.app/assets/' + 'pictos/pin-blue.png',
-            size: { width: 32, height: 32 },
+            image: getDefectIcon(defect.severity),
+            size: { width: 48, height: 48 },
           };
         }),
       });
@@ -94,11 +108,10 @@ const SyncView = ({ data, locked, isCompare, images }) => {
       {
         position: 'top right',
         coordinates: images[0].xyz,
-        bearing: 180,
         layers: [
           {
             name: 'Floor map',
-            urlTemplate: '/images/elevation_diagram.jpg',
+            urlTemplate: '/images/floor-4.png',
           },
         ],
         buttons: {
@@ -107,13 +120,28 @@ const SyncView = ({ data, locked, isCompare, images }) => {
       },
     ],
     [MarkersPlugin],
-    [
-      VirtualTourPlugin,
-      {
-        positionMode: 'manual',
-      },
-    ],
   ];
+
+  const handleOnOk = (values: any) => {
+    if (!viewer1Ref.current) return;
+    const viewer = viewer1Ref.current;
+    const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+
+    console.log(values);
+    setOpen(false);
+    setNewMarkerId('');
+    markersPlugin.removeMarker(newMarkerId);
+  };
+
+  const handleOnCancel = () => {
+    if (!viewer1Ref.current) return;
+    const viewer = viewer1Ref.current;
+    const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+
+    setOpen(false);
+    setNewMarkerId('');
+    markersPlugin.removeMarker(newMarkerId);
+  };
 
   // init viewer 1
   useEffect(() => {
@@ -122,17 +150,18 @@ const SyncView = ({ data, locked, isCompare, images }) => {
         container: container1Ref.current,
         plugins: plugins,
         zoomSpeed: 50,
-        panorama: images[0].url,
+        panorama: images[currentIndexImage].url,
       });
       const planPlugin: any = viewer.getPlugin(PlanPlugin);
-      const virtualTour: any = viewer.getPlugin(VirtualTourPlugin);
       const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
 
-      const { nodeMap, hotspotMap, nodes, hotspots } = detectInformation(images);
+      const { hotspotMap, nodeMap } = detectInformation(images);
 
       // configs
-      virtualTour.setNodes(nodes);
-      planPlugin.setHotspots(hotspots);
+      const currentNode = nodeMap.get(`node-${currentIndexImage}`);
+      currentNode.markers.forEach(marker => {
+        markersPlugin.addMarker(marker);
+      });
 
       // events
       viewer.addEventListener('position-updated', e => {
@@ -141,15 +170,19 @@ const SyncView = ({ data, locked, isCompare, images }) => {
       viewer.addEventListener('zoom-updated', e => {
         syncViewers(viewer1Ref.current, viewer2Ref.current);
       });
-      viewer.addEventListener('dblclick', e => {
-        modal.confirm({
-          title: 'Create new defect?',
-          content: (
-            <Row>
-              <Input placeholder="enter anything" />
-            </Row>
-          ),
+      viewer.addEventListener('click', ({ data }) => {
+        const newDefectId = `new-defect-${Date.now()}`;
+        markersPlugin.addMarker({
+          id: newDefectId,
+          position: { yaw: data.yaw, pitch: data.pitch },
+          image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
+          size: { width: 38, height: 38 },
         });
+
+        setTimeout(() => {
+          setOpen(true);
+          setNewMarkerId(newDefectId);
+        }, 200);
       });
       planPlugin.addEventListener('view-changed', e => {
         console.log('e.view', e.view);
@@ -157,11 +190,6 @@ const SyncView = ({ data, locked, isCompare, images }) => {
       planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
         const selectedHotspot = hotspotMap.get(hotspotId);
         console.log('selectedHotspot', selectedHotspot);
-      });
-      virtualTour.addEventListener('node-changed', ({ node, data }) => {
-        if (data.fromLink) {
-          planPlugin.setCoordinates(data.fromLink.xyz);
-        }
       });
       markersPlugin.addEventListener('select-marker', ({ marker }) => {
         const defect = marker.config;
@@ -193,18 +221,29 @@ const SyncView = ({ data, locked, isCompare, images }) => {
         viewer1Ref.current.destroy();
       }
     };
-  }, [images, locked]);
+  }, [images, locked, currentIndexImage]);
 
   // init viewer 2
   useEffect(() => {
     if (isCompare) {
+      // TODO: copy functions and configs from viewer 1 to viewer 2
       if (container2Ref.current) {
         const viewer = new Viewer({
           container: container2Ref.current,
-          panorama: images[0].url,
+          panorama: images[currentIndexImage].url,
           plugins: plugins,
           zoomSpeed: 50,
         });
+        const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+
+        const { nodeMap } = detectInformation(images);
+
+        // configs
+        const currentNode = nodeMap.get(`node-${currentIndexImage}`);
+        currentNode.markers.forEach(marker => {
+          markersPlugin.addMarker(marker);
+        });
+
         viewer.addEventListener('position-updated', e => {
           syncViewers(viewer2Ref.current, viewer1Ref.current);
         });
@@ -222,7 +261,7 @@ const SyncView = ({ data, locked, isCompare, images }) => {
         }
       };
     }
-  }, [images[0].url, locked, isCompare]);
+  }, [images, locked, isCompare, currentIndexImage]);
 
   return (
     <div style={{ display: 'flex' }}>
@@ -238,8 +277,10 @@ const SyncView = ({ data, locked, isCompare, images }) => {
         ref={container2Ref}
         style={{ width: isCompare ? '50%' : '0%', height: '80vh', objectFit: 'contain' }}
       />
+
+      <CreateDefectForm open={open} onOk={handleOnOk} onCancel={handleOnCancel} />
     </div>
   );
 };
 
-export default memo(SyncView);
+export default SyncView;

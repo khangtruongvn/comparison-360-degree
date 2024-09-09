@@ -1,21 +1,40 @@
 import { Viewer } from '@photo-sphere-viewer/core';
 import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
 import { PlanPlugin } from '@photo-sphere-viewer/plan-plugin';
-import { App } from 'antd';
+import { App, DatePicker } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CreateDefectForm from '../CreateDefectForm';
 import DefectDetail from '../DefectDetail';
 
-const SyncView = ({ locked, isCompare, images }) => {
+const getDefectIcon = (severity: string) => {
+  switch (severity) {
+    case 'Safe':
+      return '/images/icons/safe.svg';
+    case 'Unsafe':
+      return '/images/icons/unsafe.svg';
+    case 'Require Repair':
+      return '/images/icons/require_repair.svg';
+    default:
+      return '';
+  }
+};
+
+const DEFAULT_DATE = '2024-09-09';
+
+const SyncView = ({ locked, isCompare, data, toggleLock }) => {
   const { modal } = App.useApp();
+  const [open, setOpen] = useState<boolean>(false);
   const viewer1Ref = useRef<Viewer | null>(null);
   const viewer2Ref = useRef<Viewer | null>(null);
   const container1Ref = useRef<HTMLDivElement | null>(null);
   const container2Ref = useRef<HTMLDivElement | null>(null);
 
-  const [currentIndexImage] = useState<number>(0);
-  const [open, setOpen] = useState<boolean>(false);
+  const [currentDateViewer1, setCurrentDateViewer1] = useState(DEFAULT_DATE);
+  const [currentDateViewer2, setCurrentDateViewer2] = useState(DEFAULT_DATE);
   const [newMarkerId, setNewMarkerId] = useState<string>('');
+
+  const viewer1Images = data[currentDateViewer1].images;
+  const viewer2Images = data[currentDateViewer2].images;
 
   const syncViewers = (sourceViewer: Viewer | null, targetViewer: Viewer | null) => {
     if (!locked || !sourceViewer || !targetViewer) return;
@@ -26,41 +45,21 @@ const SyncView = ({ locked, isCompare, images }) => {
     targetViewer.zoom(sourceViewer.getZoomLevel());
   };
 
-  const getDefectIcon = useCallback(severity => {
-    switch (severity) {
-      case 'Safe':
-        return '/images/icons/safe.svg';
-      case 'Unsafe':
-        return '/images/icons/unsafe.svg';
-      case 'Require Repair':
-        return '/images/icons/require_repair.svg';
-      default:
-        return '';
-    }
-  }, []);
-
   const detectInformation = useCallback((images: any[]) => {
     const nodes: any = [];
-    const hotspots: any[] = [];
-
     const nodeMap = new Map();
-    const hotspotMap = new Map();
 
-    images.forEach((image, index) => {
-      const currentNodeId = `node-${index}`;
-      const currentHotspotId = `hotspot-${index}`;
+    images.forEach((image, imageIndex) => {
+      const currentNodeId = `node-${imageIndex}`;
 
       // next
-      const nextIndex = index >= images.length - 1 ? 0 : index + 1;
+      const nextIndex = imageIndex >= images.length - 1 ? 0 : imageIndex + 1;
       const nextImage = images[nextIndex];
-      const nextHotspot = nextImage.customHotspots[0];
       const nextNodeId = `node-${nextIndex}`;
       const nextNode = {
         nodeId: nextNodeId,
-        position: { yaw: nextHotspot.yaw, pitch: nextHotspot.pitch },
-        xyz: nextImage.xyz,
+        position: { textureX: nextImage.x, textureY: nextImage.y },
       };
-
       // NODES
       nodeMap.set(currentNodeId, {
         id: currentNodeId,
@@ -69,37 +68,41 @@ const SyncView = ({ locked, isCompare, images }) => {
         name: currentNodeId,
         caption: currentNodeId,
         links: [nextNode],
-        markers: image.defect.map((defect, index) => {
-          const currentMarkerId = `${currentNodeId}-defect-marker-${index}`;
-          return {
-            ...defect,
-            id: currentMarkerId,
-            position: { yaw: defect.yaw, pitch: defect.pitch },
-            image: getDefectIcon(defect.severity),
-            size: { width: 48, height: 48 },
-          };
-        }),
-      });
-      // HOTSPOT
-      hotspotMap.set(currentHotspotId, {
-        id: currentHotspotId,
-        coordinates: image.xyz,
-        tooltip: `Hotspot ${index}`,
+        markers: [
+          ...image.defect.map((defect, index) => {
+            const currentMarkerId = `${currentNodeId}-defect-marker-${index}`;
+            return {
+              data: defect,
+              id: currentMarkerId,
+              position: { yaw: defect.yaw + 'deg', pitch: defect.pitch + 'deg' },
+              image: getDefectIcon(defect.severity),
+              size: { width: 48, height: 48 },
+            };
+          }),
+          ...image.customHotspots.map((hotspot, index) => {
+            const currentHotspotId = `${currentNodeId}-hotspot-marker-${index}`;
+            return {
+              imageIndex: imageIndex,
+              id: currentHotspotId,
+              image: hotspot.icon,
+              type: 'navigate',
+              transition: index === 0 ? 'next' : 'prev',
+              position: { yaw: hotspot.yaw + 'deg', pitch: hotspot.pitch + 'deg' },
+              size: { width: 48, height: 48 },
+            };
+          }),
+        ],
+        position: { textureX: image.x, textureY: image.y },
       });
     });
 
-    hotspotMap.forEach(value => {
-      hotspots.push(value);
-    });
     nodeMap.forEach(value => {
       nodes.push(value);
     });
 
     return {
-      nodeMap,
-      hotspotMap,
       nodes,
-      hotspots,
+      nodeMap,
     };
   }, []);
 
@@ -108,7 +111,7 @@ const SyncView = ({ locked, isCompare, images }) => {
       PlanPlugin,
       {
         position: 'top right',
-        coordinates: images[0].xyz,
+        coordinates: viewer1Images[0].xyz,
         layers: [
           {
             name: 'Floor map',
@@ -121,6 +124,13 @@ const SyncView = ({ locked, isCompare, images }) => {
       },
     ],
     [MarkersPlugin],
+    // [
+    //   VirtualTourPlugin,
+    //   {
+    //     positionMode: 'manual',
+    //     renderMode: '3d',
+    //   },
+    // ],
   ];
 
   const handleOnOk = (values: any) => {
@@ -186,17 +196,16 @@ const SyncView = ({ locked, isCompare, images }) => {
     if (container1Ref.current) {
       const viewer = new Viewer({
         container: container1Ref.current,
+        panorama: viewer1Images[0].url,
         plugins: plugins,
         zoomSpeed: 50,
-        panorama: images[currentIndexImage].url,
+        navbar: ['zoom'],
       });
-      const planPlugin: any = viewer.getPlugin(PlanPlugin);
+      const { nodeMap } = detectInformation(viewer1Images);
       const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
-
-      const { hotspotMap, nodeMap } = detectInformation(images);
-
       // configs
-      const currentNode = nodeMap.get(`node-${currentIndexImage}`);
+      viewer.zoom(0);
+      const currentNode = nodeMap.get(`node-${0}`);
       currentNode.markers.forEach(marker => {
         markersPlugin.addMarker(marker);
       });
@@ -208,7 +217,7 @@ const SyncView = ({ locked, isCompare, images }) => {
       viewer.addEventListener('zoom-updated', e => {
         syncViewers(viewer1Ref.current, viewer2Ref.current);
       });
-      viewer.addEventListener('click', ({ data }) => {
+      viewer.addEventListener('dblclick', ({ data }) => {
         const newDefectId = `new-defect-${Date.now()}`;
         markersPlugin.addMarker({
           id: newDefectId,
@@ -217,34 +226,63 @@ const SyncView = ({ locked, isCompare, images }) => {
           size: { width: 38, height: 38 },
         });
 
-        if (viewer2Ref.current) {
-          const markersPlugin2: any = viewer2Ref.current?.getPlugin(MarkersPlugin);
-          markersPlugin2.addMarker({
-            id: newDefectId,
-            position: { yaw: data.yaw, pitch: data.pitch },
-            image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
-            size: { width: 38, height: 38 },
-          });
+        try {
+          if (viewer2Ref.current) {
+            const markersPlugin2: any = viewer2Ref.current?.getPlugin(MarkersPlugin);
+            markersPlugin2.addMarker({
+              id: newDefectId,
+              position: { yaw: data.yaw, pitch: data.pitch },
+              image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
+              size: { width: 38, height: 38 },
+            });
+          }
+        } catch (error) {
+          console.log(error);
         }
 
         setOpen(true);
         setNewMarkerId(newDefectId);
       });
-      planPlugin.addEventListener('view-changed', e => {
-        console.log('e.view', e.view);
-      });
-      planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
-        const selectedHotspot = hotspotMap.get(hotspotId);
-        console.log('selectedHotspot', selectedHotspot);
-      });
-      markersPlugin.addEventListener('select-marker', ({ marker }) => {
-        const defect = marker.config;
-        modal.info({
-          width: 600,
-          centered: true,
-          title: `Defect ${defect.defect_id_elevation}`,
-          content: <DefectDetail defect={defect} />,
-        });
+
+      // planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
+      //   const selectedHotspot = hotspotMap.get(hotspotId);
+      //   console.log('selectedHotspot', selectedHotspot);
+      // });
+
+      markersPlugin.addEventListener('select-marker', e => {
+        const { marker } = e;
+        const defect = marker.config.data || {};
+        if (marker.config.type === 'navigate') {
+          const isLockNext = marker.config.imageIndex === viewer1Images.length - 1;
+          const isLockPrev = marker.config.imageIndex === 0;
+          switch (marker.config.transition) {
+            case 'next':
+              if (isLockNext) return;
+              const nextNode = nodeMap.get(`node-${marker.config.imageIndex + 1}`);
+              markersPlugin.clearMarkers();
+              viewer.setPanorama(nextNode.panorama);
+              nextNode.markers.forEach(marker => {
+                markersPlugin.addMarker(marker);
+              });
+              return;
+            case 'prev':
+              if (isLockPrev) return;
+              const prevNode = nodeMap.get(`node-${marker.config.imageIndex - 1}`);
+              markersPlugin.clearMarkers();
+              viewer.setPanorama(prevNode.panorama);
+              prevNode.markers.forEach(marker => {
+                markersPlugin.addMarker(marker);
+              });
+              return;
+          }
+        } else {
+          modal.info({
+            width: 800,
+            centered: true,
+            title: `Defect ${defect.defect_id_elevation}`,
+            content: <DefectDetail defect={defect} />,
+          });
+        }
       });
 
       viewer1Ref.current = viewer;
@@ -256,7 +294,7 @@ const SyncView = ({ locked, isCompare, images }) => {
         viewer1Ref.current.destroy();
       }
     };
-  }, [images, locked, currentIndexImage]);
+  }, [viewer1Images, locked]);
 
   // init viewer 2
   useEffect(() => {
@@ -265,16 +303,15 @@ const SyncView = ({ locked, isCompare, images }) => {
       if (container2Ref.current) {
         const viewer = new Viewer({
           container: container2Ref.current,
-          panorama: images[currentIndexImage].url,
+          panorama: viewer2Images[0].url,
           plugins: plugins,
           zoomSpeed: 50,
         });
+        const { nodeMap } = detectInformation(viewer2Images);
         const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
-
-        const { nodeMap } = detectInformation(images);
-
         // configs
-        const currentNode = nodeMap.get(`node-${currentIndexImage}`);
+        viewer.zoom(0);
+        const currentNode = nodeMap.get(`node-${0}`);
         currentNode.markers.forEach(marker => {
           markersPlugin.addMarker(marker);
         });
@@ -285,7 +322,7 @@ const SyncView = ({ locked, isCompare, images }) => {
         viewer.addEventListener('zoom-updated', e => {
           syncViewers(viewer2Ref.current, viewer1Ref.current);
         });
-        viewer.addEventListener('click', ({ data }) => {
+        viewer.addEventListener('dblclick', ({ data }) => {
           const newDefectId = `new-defect-${Date.now()}`;
           markersPlugin.addMarker({
             id: newDefectId,
@@ -294,28 +331,58 @@ const SyncView = ({ locked, isCompare, images }) => {
             size: { width: 38, height: 38 },
           });
 
-          if (viewer1Ref.current) {
-            const markersPlugin2: any = viewer1Ref.current?.getPlugin(MarkersPlugin);
-            markersPlugin2.addMarker({
-              id: newDefectId,
-              position: { yaw: data.yaw, pitch: data.pitch },
-              image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
-              size: { width: 38, height: 38 },
-            });
+          try {
+            if (viewer1Ref.current) {
+              const markersPlugin2: any = viewer1Ref.current?.getPlugin(MarkersPlugin);
+              markersPlugin2.addMarker({
+                id: newDefectId,
+                position: { yaw: data.yaw, pitch: data.pitch },
+                image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
+                size: { width: 38, height: 38 },
+              });
+            }
+          } catch (error) {
+            console.log(error);
           }
 
           setOpen(true);
           setNewMarkerId(newDefectId);
         });
 
-        markersPlugin.addEventListener('select-marker', ({ marker }) => {
-          const defect = marker.config;
-          modal.info({
-            width: 600,
-            centered: true,
-            title: `Defect ${defect.defect_id_elevation}`,
-            content: <DefectDetail defect={defect} />,
-          });
+        markersPlugin.addEventListener('select-marker', e => {
+          const { marker } = e;
+          const defect = marker.config.data || {};
+          if (marker.config.type === 'navigate') {
+            const isLockNext = marker.config.imageIndex === viewer2Images.length - 1;
+            const isLockPrev = marker.config.imageIndex === 0;
+            switch (marker.config.transition) {
+              case 'next':
+                if (isLockNext) return;
+                const nextNode = nodeMap.get(`node-${marker.config.imageIndex + 1}`);
+                markersPlugin.clearMarkers();
+                viewer.setPanorama(nextNode.panorama);
+                nextNode.markers.forEach(marker => {
+                  markersPlugin.addMarker(marker);
+                });
+                return;
+              case 'prev':
+                if (isLockPrev) return;
+                const prevNode = nodeMap.get(`node-${marker.config.imageIndex - 1}`);
+                markersPlugin.clearMarkers();
+                viewer.setPanorama(prevNode.panorama);
+                prevNode.markers.forEach(marker => {
+                  markersPlugin.addMarker(marker);
+                });
+                return;
+            }
+          } else {
+            modal.info({
+              width: 800,
+              centered: true,
+              title: `Defect ${defect.defect_id_elevation}`,
+              content: <DefectDetail defect={defect} />,
+            });
+          }
         });
 
         viewer2Ref.current = viewer;
@@ -328,22 +395,38 @@ const SyncView = ({ locked, isCompare, images }) => {
         }
       };
     }
-  }, [images, locked, isCompare, currentIndexImage]);
+  }, [viewer2Images, locked, isCompare]);
 
   return (
     <div style={{ display: 'flex' }}>
       <div
         ref={container1Ref}
         style={{
+          position: 'relative',
           width: isCompare ? '50%' : '100%',
           height: '80vh',
           objectFit: 'contain',
         }}
-      />
+      >
+        <DatePicker
+          style={{ position: 'absolute', zIndex: 999, bottom: 4, left: '50%' }}
+          onChange={(_, dateString) => setCurrentDateViewer1(dateString.toString())}
+        />
+      </div>
       <div
         ref={container2Ref}
-        style={{ width: isCompare ? '50%' : '0%', height: '80vh', objectFit: 'contain' }}
-      />
+        style={{
+          width: isCompare ? '50%' : '0%',
+          height: '80vh',
+          objectFit: 'contain',
+          position: 'relative',
+        }}
+      >
+        <DatePicker
+          style={{ position: 'absolute', zIndex: 999, bottom: 4, left: '50%' }}
+          onChange={(_, dateString) => setCurrentDateViewer2(dateString.toString())}
+        />
+      </div>
 
       <CreateDefectForm open={open} onOk={handleOnOk} onCancel={handleOnCancel} />
     </div>

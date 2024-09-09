@@ -1,4 +1,4 @@
-import { Image, Space, Typography } from 'antd';
+import { Image, Typography } from 'antd';
 
 const DefectDetail = ({ defect }) => {
   return (
@@ -76,59 +76,10 @@ const DefectDetail = ({ defect }) => {
           <Typography.Text strong>Image</Typography.Text>
         </td>
         <td>
-          <Image src={defect.imageUrl} />
+          <Image style={{ width: 400 }} src={defect.imageUrl} />
         </td>
       </tr>
     </table>
-  );
-
-  return (
-    <Space direction="vertical" size="small" style={{ width: '100%' }}>
-      <Space>
-        <Typography.Text strong>ID</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-
-      <Space>
-        <Typography.Text strong>Component</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-
-      <Space>
-        <Typography.Text strong>Component</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-
-      <Space>
-        <Typography.Text strong>Component</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-
-      <Space>
-        <Typography.Text strong>Component</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-
-      <Space>
-        <Typography.Text strong>Component</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-
-      <Space>
-        <Typography.Text strong>Component</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-
-      <Space>
-        <Typography.Text strong>Component</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-
-      <Space>
-        <Typography.Text strong>Component</Typography.Text>
-        <Typography.Text>121212</Typography.Text>
-      </Space>
-    </Space>
   );
 };
 

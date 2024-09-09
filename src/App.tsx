@@ -10,7 +10,7 @@ import SyncViewSphere from './SyncViewPhotoPhereViewer';
 import { DUMMY_DATA } from './constants';
 
 function App() {
-  return <SyncViewSphere images={DUMMY_DATA.images} />;
+  return <SyncViewSphere data={DUMMY_DATA} />;
 }
 
 export default App;

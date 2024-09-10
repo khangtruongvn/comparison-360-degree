@@ -136,25 +136,25 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
 
   const handleOnOk = (values: any) => {
     try {
-      try {
-        if (viewer1Ref.current) {
-          const viewer = viewer1Ref.current;
-          const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
-          markersPlugin.removeMarker(newMarkerId);
-        }
-      } catch (error: any) {
-        console.log(error);
-      }
+      // try {
+      //   if (viewer1Ref.current) {
+      //     const viewer = viewer1Ref.current;
+      //     const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+      //     markersPlugin.removeMarker(newMarkerId);
+      //   }
+      // } catch (error: any) {
+      //   console.log(error);
+      // }
 
-      try {
-        if (viewer2Ref.current) {
-          const viewer = viewer2Ref.current;
-          const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
-          markersPlugin.removeMarker(newMarkerId);
-        }
-      } catch (error: any) {
-        console.log(error);
-      }
+      // try {
+      //   if (viewer2Ref.current) {
+      //     const viewer = viewer2Ref.current;
+      //     const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+      //     markersPlugin.removeMarker(newMarkerId);
+      //   }
+      // } catch (error: any) {
+      //   console.log(error);
+      // }
 
       console.log(values);
       setOpen(false);
@@ -224,13 +224,23 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
         syncViewers(viewer1Ref.current, viewer2Ref.current);
       });
       viewer.addEventListener('dblclick', ({ data }) => {
+        console.log('data', data);
         const newDefectId = `new-defect-${Date.now()}`;
         markersPlugin.addMarker({
           id: newDefectId,
           position: { yaw: data.yaw, pitch: data.pitch },
-          image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
+          image: '/images/icons/new-defect.svg',
           size: { width: 38, height: 38 },
         });
+        planPlugin.clearHotspots();
+        planPlugin.setHotspots([
+          ...currentNode.hotspots,
+          {
+            id: 'new',
+            coordinates: [data.viewerX, 404 - data.viewerY],
+            color: 'blue',
+          },
+        ]);
 
         try {
           if (viewer2Ref.current) {
@@ -238,7 +248,7 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
             markersPlugin2.addMarker({
               id: newDefectId,
               position: { yaw: data.yaw, pitch: data.pitch },
-              image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
+              image: '/images/icons/new-defect.svg',
               size: { width: 38, height: 38 },
             });
           }

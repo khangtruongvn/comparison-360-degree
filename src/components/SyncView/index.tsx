@@ -2,6 +2,7 @@ import { Viewer } from '@photo-sphere-viewer/core';
 import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
 import { PlanPlugin } from '@photo-sphere-viewer/plan-plugin';
 import { App, DatePicker } from 'antd';
+import L from 'leaflet';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CreateDefectForm from '../CreateDefectForm';
 import DefectDetail from '../DefectDetail';
@@ -36,6 +37,9 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
   const viewer1Images = data[currentDateViewer1].images;
   const viewer2Images = data[currentDateViewer2].images;
 
+  const floorPlanImage1 = data[currentDateViewer1].floorPlanImage;
+  const floorPlanImage2 = data[currentDateViewer2].floorPlanImage;
+
   const syncViewers = (sourceViewer: Viewer | null, targetViewer: Viewer | null) => {
     if (!locked || !sourceViewer || !targetViewer) return;
     targetViewer.rotate({
@@ -52,22 +56,21 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
     images.forEach((image, imageIndex) => {
       const currentNodeId = `node-${imageIndex}`;
 
-      // next
-      const nextIndex = imageIndex >= images.length - 1 ? 0 : imageIndex + 1;
-      const nextImage = images[nextIndex];
-      const nextNodeId = `node-${nextIndex}`;
-      const nextNode = {
-        nodeId: nextNodeId,
-        position: { textureX: nextImage.x, textureY: nextImage.y },
-      };
       // NODES
       nodeMap.set(currentNodeId, {
         id: currentNodeId,
         panorama: image.url,
         thumbnail: image.url,
         name: currentNodeId,
-        caption: currentNodeId,
-        links: [nextNode],
+        caption: image.image_name,
+        hotspots: image.defect.map((defect, index) => {
+          const currentHotspotId = `${currentNodeId}-hotspot-${index}`;
+          return {
+            id: currentHotspotId,
+            coordinates: [defect.x_loc, 404 - defect.y_loc],
+            color: defect.color,
+          };
+        }),
         markers: [
           ...image.defect.map((defect, index) => {
             const currentMarkerId = `${currentNodeId}-defect-marker-${index}`;
@@ -92,7 +95,7 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
             };
           }),
         ],
-        position: { textureX: image.x, textureY: image.y },
+        position: { x: image.x, y: image.y },
       });
     });
 
@@ -111,26 +114,24 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
       PlanPlugin,
       {
         position: 'top right',
-        coordinates: viewer1Images[0].xyz,
-        layers: [
-          {
-            name: 'Floor map',
-            urlTemplate: '/images/floor-4.png',
-          },
-        ],
         buttons: {
           reset: false,
+        },
+        configureLeaflet: map => {
+          map.options.crs = L.CRS.Simple;
+          const imageBounds = [
+            [0, 0],
+            [404, 1200], // hard code
+          ];
+          L.imageOverlay(floorPlanImage1, imageBounds).addTo(map);
+          map.setMaxZoom(2);
+          map.setMinZoom(-1);
+          map.fitBounds(imageBounds);
+          map.setMaxBounds(imageBounds);
         },
       },
     ],
     [MarkersPlugin],
-    // [
-    //   VirtualTourPlugin,
-    //   {
-    //     positionMode: 'manual',
-    //     renderMode: '3d',
-    //   },
-    // ],
   ];
 
   const handleOnOk = (values: any) => {
@@ -203,12 +204,17 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
       });
       const { nodeMap } = detectInformation(viewer1Images);
       const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
-      // configs
+      const planPlugin: any = viewer.getPlugin(PlanPlugin);
+
+      // first load viewer
       viewer.zoom(0);
       const currentNode = nodeMap.get(`node-${0}`);
       currentNode.markers.forEach(marker => {
         markersPlugin.addMarker(marker);
       });
+      const newY = 404 - currentNode.position.y;
+      planPlugin.setCoordinates([currentNode.position.x, newY]);
+      planPlugin.setHotspots(currentNode.hotspots);
 
       // events
       viewer.addEventListener('position-updated', e => {
@@ -244,10 +250,10 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
         setNewMarkerId(newDefectId);
       });
 
-      // planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
-      //   const selectedHotspot = hotspotMap.get(hotspotId);
-      //   console.log('selectedHotspot', selectedHotspot);
-      // });
+      planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
+        const selectedHotspot = currentNode.hotspots.find(x => x.id === hotspotId);
+        console.log('selectedHotspot', selectedHotspot);
+      });
 
       markersPlugin.addEventListener('select-marker', e => {
         const { marker } = e;
@@ -264,6 +270,7 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
               nextNode.markers.forEach(marker => {
                 markersPlugin.addMarker(marker);
               });
+              planPlugin.setHotspots(nextNode.hotspots);
               return;
             case 'prev':
               if (isLockPrev) return;
@@ -273,6 +280,7 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
               prevNode.markers.forEach(marker => {
                 markersPlugin.addMarker(marker);
               });
+              planPlugin.setHotspots(prevNode.hotspots);
               return;
           }
         } else {

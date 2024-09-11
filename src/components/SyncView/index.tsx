@@ -20,7 +20,7 @@ const getDefectIcon = (severity: string) => {
   }
 };
 
-const DEFAULT_DATE = '2024-09-09';
+const DEFAULT_DATE = '2024-09-08';
 
 const SyncView = ({ locked, isCompare, data, toggleLock }) => {
   const { modal } = App.useApp();
@@ -34,11 +34,17 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
   const [currentDateViewer2, setCurrentDateViewer2] = useState(DEFAULT_DATE);
   const [newMarkerId, setNewMarkerId] = useState<string>('');
 
-  const viewer1Images = data[currentDateViewer1].images;
-  const viewer2Images = data[currentDateViewer2].images;
+  const { images: viewer1Images } = data[currentDateViewer1];
+  const {
+    images: viewer2Images,
+    floorPlanImageWidth: floorPlanImageWidth2,
+    floorPlanImageHeight: floorPlanImageHeight2,
+  } = data[currentDateViewer2];
 
   const floorPlanImage1 = data[currentDateViewer1].floorPlanImage;
   const floorPlanImage2 = data[currentDateViewer2].floorPlanImage;
+  const floorPlanImageWidth1 = data[currentDateViewer1].floorPlanImageWidth / 2;
+  const floorPlanImageHeight1 = data[currentDateViewer1].floorPlanImageHeight / 2;
 
   const syncViewers = (sourceViewer: Viewer | null, targetViewer: Viewer | null) => {
     if (!locked || !sourceViewer || !targetViewer) return;
@@ -49,65 +55,80 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
     targetViewer.zoom(sourceViewer.getZoomLevel());
   };
 
-  const detectInformation = useCallback((images: any[]) => {
-    const nodes: any = [];
-    const nodeMap = new Map();
+  const detectInformation = useCallback(
+    (images: any[], height: number) => {
+      const nodes: any = [];
+      const hotspots: any = []; // hotspots from all images
+      const nodeMap = new Map();
+      const hotspotsMap = new Map();
 
-    images.forEach((image, imageIndex) => {
-      const currentNodeId = `node-${imageIndex}`;
-
-      // NODES
-      nodeMap.set(currentNodeId, {
-        id: currentNodeId,
-        panorama: image.url,
-        thumbnail: image.url,
-        name: currentNodeId,
-        caption: image.image_name,
-        hotspots: image.defect.map((defect, index) => {
+      images.forEach((image, imageIndex) => {
+        const currentNodeId = `node-${imageIndex}`;
+        hotspotsMap.set(currentNodeId, {
+          color: '#0587ff47',
+          id: currentNodeId,
+          coordinates: [image.x / 2, height - image.y / 2], // refactor code with '/2'
+        });
+        image.defect.forEach((defect, index) => {
           const currentHotspotId = `${currentNodeId}-hotspot-${index}`;
-          return {
+          hotspotsMap.set(currentHotspotId, {
             id: currentHotspotId,
-            coordinates: [defect.x_loc, 404 - defect.y_loc],
+            coordinates: [defect.x_loc / 2, height - defect.y_loc / 2],
             color: defect.color,
-          };
-        }),
-        markers: [
-          ...image.defect.map((defect, index) => {
-            const currentMarkerId = `${currentNodeId}-defect-marker-${index}`;
-            return {
-              data: defect,
-              id: currentMarkerId,
-              position: { yaw: defect.yaw + 'deg', pitch: defect.pitch + 'deg' },
-              image: getDefectIcon(defect.severity),
-              size: { width: 48, height: 48 },
-            };
-          }),
-          ...image.customHotspots.map((hotspot, index) => {
-            const currentHotspotId = `${currentNodeId}-hotspot-marker-${index}`;
-            return {
-              imageIndex: imageIndex,
-              id: currentHotspotId,
-              image: hotspot.icon,
-              type: 'navigate',
-              transition: index === 0 ? 'next' : 'prev',
-              position: { yaw: hotspot.yaw + 'deg', pitch: hotspot.pitch + 'deg' },
-              size: { width: 48, height: 48 },
-            };
-          }),
-        ],
-        position: { x: image.x, y: image.y },
+            size: 22,
+          });
+        });
+        // NODES
+        nodeMap.set(currentNodeId, {
+          id: currentNodeId,
+          panorama: image.url,
+          thumbnail: image.url,
+          name: currentNodeId,
+          caption: image.image_name,
+          markers: [
+            ...image.defect.map((defect, index) => {
+              const currentMarkerId = `${currentNodeId}-defect-marker-${index}`;
+              return {
+                data: defect,
+                id: currentMarkerId,
+                position: { yaw: defect.yaw + 'deg', pitch: defect.pitch + 'deg' },
+                image: getDefectIcon(defect.severity),
+                size: { width: 48, height: 48 },
+              };
+            }),
+            ...image.customHotspots.map((hotspot, index) => {
+              const currentHotspotId = `${currentNodeId}-hotspot-marker-${index}`;
+              return {
+                imageIndex: imageIndex,
+                id: currentHotspotId,
+                image: hotspot.icon,
+                type: 'navigate',
+                transition: index === 0 ? 'next' : 'prev',
+                position: { yaw: hotspot.yaw + 'deg', pitch: hotspot.pitch + 'deg' },
+                size: { width: 48, height: 48 },
+              };
+            }),
+          ],
+          position: { x: image.x / 2, y: height - image.y / 2 },
+        });
       });
-    });
 
-    nodeMap.forEach(value => {
-      nodes.push(value);
-    });
+      nodeMap.forEach(value => {
+        nodes.push(value);
+      });
+      hotspotsMap.forEach(value => {
+        hotspots.push(value);
+      });
 
-    return {
-      nodes,
-      nodeMap,
-    };
-  }, []);
+      return {
+        nodes,
+        hotspots,
+        nodeMap,
+        hotspotsMap,
+      };
+    },
+    [floorPlanImageHeight1]
+  );
 
   const plugins: any = [
     [
@@ -117,14 +138,20 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
         buttons: {
           reset: false,
         },
-        configureLeaflet: map => {
-          map.options.crs = L.CRS.Simple;
+        size: {
+          height: floorPlanImageHeight1 + 'px',
+          width: floorPlanImageWidth1 + 'px',
+        },
+        configureLeaflet(map) {
           const imageBounds = [
             [0, 0],
-            [404, 1200], // hard code
+            [floorPlanImageHeight1, floorPlanImageWidth1],
           ];
+
+          map.options.crs = L.CRS.Simple;
           L.imageOverlay(floorPlanImage1, imageBounds).addTo(map);
-          map.setMaxZoom(2);
+
+          map.setMaxZoom(0);
           map.setMinZoom(-1);
           map.fitBounds(imageBounds);
           map.setMaxBounds(imageBounds);
@@ -202,7 +229,10 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
         zoomSpeed: 50,
         navbar: ['zoom'],
       });
-      const { nodeMap } = detectInformation(viewer1Images);
+      const { nodeMap, hotspots, hotspotsMap } = detectInformation(
+        viewer1Images,
+        floorPlanImageHeight1
+      );
       const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
       const planPlugin: any = viewer.getPlugin(PlanPlugin);
 
@@ -212,9 +242,8 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
       currentNode.markers.forEach(marker => {
         markersPlugin.addMarker(marker);
       });
-      const newY = 404 - currentNode.position.y;
-      planPlugin.setCoordinates([currentNode.position.x, newY]);
-      planPlugin.setHotspots(currentNode.hotspots);
+      planPlugin.setHotspots(hotspots);
+      planPlugin.setCoordinates([currentNode.position.x, currentNode.position.y]);
 
       // events
       viewer.addEventListener('position-updated', e => {
@@ -224,7 +253,6 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
         syncViewers(viewer1Ref.current, viewer2Ref.current);
       });
       viewer.addEventListener('dblclick', ({ data }) => {
-        console.log('data', data);
         const newDefectId = `new-defect-${Date.now()}`;
         markersPlugin.addMarker({
           id: newDefectId,
@@ -232,15 +260,6 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
           image: '/images/icons/new-defect.svg',
           size: { width: 38, height: 38 },
         });
-        planPlugin.clearHotspots();
-        planPlugin.setHotspots([
-          ...currentNode.hotspots,
-          {
-            id: 'new',
-            coordinates: [data.viewerX, 404 - data.viewerY],
-            color: 'blue',
-          },
-        ]);
 
         try {
           if (viewer2Ref.current) {
@@ -261,7 +280,7 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
       });
 
       planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
-        const selectedHotspot = currentNode.hotspots.find(x => x.id === hotspotId);
+        const selectedHotspot = hotspotsMap.get(hotspotId);
         console.log('selectedHotspot', selectedHotspot);
       });
 
@@ -280,7 +299,7 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
               nextNode.markers.forEach(marker => {
                 markersPlugin.addMarker(marker);
               });
-              planPlugin.setHotspots(nextNode.hotspots);
+              planPlugin.setCoordinates([nextNode.position.x, nextNode.position.y]);
               return;
             case 'prev':
               if (isLockPrev) return;
@@ -290,7 +309,7 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
               prevNode.markers.forEach(marker => {
                 markersPlugin.addMarker(marker);
               });
-              planPlugin.setHotspots(prevNode.hotspots);
+              planPlugin.setCoordinates([prevNode.position.x, prevNode.position.y]);
               return;
           }
         } else {
@@ -325,14 +344,18 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
           plugins: plugins,
           zoomSpeed: 50,
         });
-        const { nodeMap } = detectInformation(viewer2Images);
+        const { nodeMap, hotspots } = detectInformation(viewer2Images, floorPlanImageHeight2);
         const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+        const planPlugin: any = viewer.getPlugin(PlanPlugin);
+        const map = planPlugin.getLeaflet();
         // configs
         viewer.zoom(0);
         const currentNode = nodeMap.get(`node-${0}`);
         currentNode.markers.forEach(marker => {
           markersPlugin.addMarker(marker);
         });
+        planPlugin.setHotspots(hotspots);
+        planPlugin.setCoordinates([currentNode.position.x, currentNode.position.y]);
 
         viewer.addEventListener('position-updated', e => {
           syncViewers(viewer2Ref.current, viewer1Ref.current);
@@ -441,7 +464,13 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
         }}
       >
         <DatePicker
-          style={{ position: 'absolute', zIndex: 999, bottom: 4, left: '50%' }}
+          style={{
+            bottom: 4,
+            zIndex: 999,
+            left: '50%',
+            position: 'absolute',
+            display: isCompare ? 'block' : 'none',
+          }}
           onChange={(_, dateString) => setCurrentDateViewer2(dateString.toString())}
         />
       </div>

@@ -14,7 +14,9 @@ const DefectDetail = ({ defect }) => {
 
       <tr>
         <td>
-          <Typography.Text strong>Component</Typography.Text>
+          <Typography.Text strong style={{ textWrap: 'nowrap' }}>
+            Component
+          </Typography.Text>
         </td>
         <td>
           <Typography.Text>{defect.component}</Typography.Text>

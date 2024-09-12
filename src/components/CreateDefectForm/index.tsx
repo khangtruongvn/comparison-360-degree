@@ -75,7 +75,7 @@ const CreateDefectForm = ({ open, onOk, onCancel }: ICreateDefectForm) => {
               required={true}
               name="component"
               label="Component"
-              rules={[{ required: true }]}
+              // rules={[{ required: true }]}
             >
               <Select
                 options={COMPONENTS}
@@ -92,7 +92,7 @@ const CreateDefectForm = ({ open, onOk, onCancel }: ICreateDefectForm) => {
               required={true}
               name="subComponent"
               label="Sub component"
-              rules={[{ required: true }]}
+              // rules={[{ required: true }]}
             >
               <Select
                 disabled={!component}
@@ -110,7 +110,7 @@ const CreateDefectForm = ({ open, onOk, onCancel }: ICreateDefectForm) => {
               label="Material"
               name="material"
               required={true}
-              rules={[{ required: true }]}
+              // rules={[{ required: true }]}
             >
               <Select
                 disabled={!subComponent}

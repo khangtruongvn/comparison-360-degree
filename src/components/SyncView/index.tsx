@@ -20,7 +20,50 @@ const getDefectIcon = (severity: string) => {
   }
 };
 
-const DEFAULT_DATE = '2024-09-08';
+const getPlugins = (planImage: IPlanImage): any => {
+  return [
+    [
+      PlanPlugin,
+      {
+        position: 'top right',
+        buttons: {
+          reset: false,
+          close: false,
+        },
+        size: {
+          height: planImage.miniHeight + 'px',
+          width: planImage.miniWidth + 'px',
+        },
+        defaultZoom: 0,
+        configureLeaflet(map) {
+          const imageBounds = [
+            [0, 0],
+            [planImage.miniHeight, planImage.miniWidth],
+          ];
+
+          map.options.crs = L.CRS.Simple;
+          L.imageOverlay(planImage.imageSource, imageBounds).addTo(map);
+
+          map.setMaxZoom(2);
+          map.setMinZoom(-1);
+          map.fitBounds(imageBounds);
+          map.setMaxBounds(imageBounds);
+        },
+      },
+    ],
+    [MarkersPlugin],
+  ];
+};
+
+const DEFAULT_DATE = '2024-09-09';
+
+interface IPlanImage {
+  width: number;
+  height: number;
+  miniWidth: number;
+  miniHeight: number;
+  imageSource: string;
+}
 
 const SyncView = ({ locked, isCompare, data, toggleLock }) => {
   const { modal } = App.useApp();
@@ -30,160 +73,72 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
   const container1Ref = useRef<HTMLDivElement | null>(null);
   const container2Ref = useRef<HTMLDivElement | null>(null);
 
+  const [newMarkerId, setNewMarkerId] = useState<string>('');
+  const [currentIndexNodeViewer1, setCurrentIndexNodeViewer1] = useState<number>(0);
+  const [currentIndexNodeViewer2, setCurrentIndexNodeViewer2] = useState<number>(0);
   const [currentDateViewer1, setCurrentDateViewer1] = useState(DEFAULT_DATE);
   const [currentDateViewer2, setCurrentDateViewer2] = useState(DEFAULT_DATE);
-  const [newMarkerId, setNewMarkerId] = useState<string>('');
 
   const { images: viewer1Images } = data[currentDateViewer1];
-  const {
-    images: viewer2Images,
-    floorPlanImageWidth: floorPlanImageWidth2,
-    floorPlanImageHeight: floorPlanImageHeight2,
-  } = data[currentDateViewer2];
-
-  const floorPlanImage1 = data[currentDateViewer1].floorPlanImage;
-  const floorPlanImage2 = data[currentDateViewer2].floorPlanImage;
-  const floorPlanImageWidth1 = data[currentDateViewer1].floorPlanImageWidth / 2;
-  const floorPlanImageHeight1 = data[currentDateViewer1].floorPlanImageHeight / 2;
-
-  const syncViewers = (sourceViewer: Viewer | null, targetViewer: Viewer | null) => {
-    if (!locked || !sourceViewer || !targetViewer) return;
-    targetViewer.rotate({
-      pitch: sourceViewer.getPosition().pitch,
-      yaw: sourceViewer.getPosition().yaw,
-    });
-    targetViewer.zoom(sourceViewer.getZoomLevel());
+  const planImageViewer1: IPlanImage = {
+    imageSource: data[currentDateViewer1].floorPlanImage,
+    width: data[currentDateViewer1].floorPlanImageWidth,
+    height: data[currentDateViewer1].floorPlanImageHeight,
+    miniWidth: data[currentDateViewer1].floorPlanImageWidth / 2,
+    miniHeight: data[currentDateViewer1].floorPlanImageHeight / 2,
   };
 
-  const detectInformation = useCallback(
-    (images: any[], height: number) => {
-      const nodes: any = [];
-      const hotspots: any = []; // hotspots from all images
-      const nodeMap = new Map();
-      const hotspotsMap = new Map();
-
-      images.forEach((image, imageIndex) => {
-        const currentNodeId = `node-${imageIndex}`;
-        hotspotsMap.set(currentNodeId, {
-          color: '#0587ff47',
-          id: currentNodeId,
-          coordinates: [image.x / 2, height - image.y / 2], // refactor code with '/2'
-        });
-        image.defect.forEach((defect, index) => {
-          const currentHotspotId = `${currentNodeId}-hotspot-${index}`;
-          hotspotsMap.set(currentHotspotId, {
-            id: currentHotspotId,
-            coordinates: [defect.x_loc / 2, height - defect.y_loc / 2],
-            color: defect.color,
-            size: 22,
-          });
-        });
-        // NODES
-        nodeMap.set(currentNodeId, {
-          id: currentNodeId,
-          panorama: image.url,
-          thumbnail: image.url,
-          name: currentNodeId,
-          caption: image.image_name,
-          markers: [
-            ...image.defect.map((defect, index) => {
-              const currentMarkerId = `${currentNodeId}-defect-marker-${index}`;
-              return {
-                data: defect,
-                id: currentMarkerId,
-                position: { yaw: defect.yaw + 'deg', pitch: defect.pitch + 'deg' },
-                image: getDefectIcon(defect.severity),
-                size: { width: 48, height: 48 },
-              };
-            }),
-            ...image.customHotspots.map((hotspot, index) => {
-              const currentHotspotId = `${currentNodeId}-hotspot-marker-${index}`;
-              return {
-                imageIndex: imageIndex,
-                id: currentHotspotId,
-                image: hotspot.icon,
-                type: 'navigate',
-                transition: index === 0 ? 'next' : 'prev',
-                position: { yaw: hotspot.yaw + 'deg', pitch: hotspot.pitch + 'deg' },
-                size: { width: 48, height: 48 },
-              };
-            }),
-          ],
-          position: { x: image.x / 2, y: height - image.y / 2 },
-        });
-      });
-
-      nodeMap.forEach(value => {
-        nodes.push(value);
-      });
-      hotspotsMap.forEach(value => {
-        hotspots.push(value);
-      });
-
-      return {
-        nodes,
-        hotspots,
-        nodeMap,
-        hotspotsMap,
-      };
-    },
-    [floorPlanImageHeight1]
-  );
-
-  const plugins: any = [
-    [
-      PlanPlugin,
-      {
-        position: 'top right',
-        buttons: {
-          reset: false,
-        },
-        size: {
-          height: floorPlanImageHeight1 + 'px',
-          width: floorPlanImageWidth1 + 'px',
-        },
-        configureLeaflet(map) {
-          const imageBounds = [
-            [0, 0],
-            [floorPlanImageHeight1, floorPlanImageWidth1],
-          ];
-
-          map.options.crs = L.CRS.Simple;
-          L.imageOverlay(floorPlanImage1, imageBounds).addTo(map);
-
-          map.setMaxZoom(0);
-          map.setMinZoom(-1);
-          map.fitBounds(imageBounds);
-          map.setMaxBounds(imageBounds);
-        },
-      },
-    ],
-    [MarkersPlugin],
-  ];
+  const { images: viewer2Images } = data[currentDateViewer2];
+  const planImageViewer2: IPlanImage = {
+    imageSource: data[currentDateViewer2].floorPlanImage,
+    width: data[currentDateViewer2].floorPlanImageWidth,
+    height: data[currentDateViewer2].floorPlanImageHeight,
+    miniWidth: data[currentDateViewer2].floorPlanImageWidth / 2,
+    miniHeight: data[currentDateViewer2].floorPlanImageHeight / 2,
+  };
 
   const handleOnOk = (values: any) => {
     try {
-      // try {
-      //   if (viewer1Ref.current) {
-      //     const viewer = viewer1Ref.current;
-      //     const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
-      //     markersPlugin.removeMarker(newMarkerId);
-      //   }
-      // } catch (error: any) {
-      //   console.log(error);
-      // }
+      const currentNodeId = `node-${currentIndexNodeViewer1}`;
+      const { nodeMap, hotspots } = detectInformation(viewer1Images, planImageViewer1.miniHeight);
+      const currentNode = nodeMap.get(currentNodeId);
+      const randomPositionForPlan = {
+        x: currentNode.position.x + Math.floor(Math.random() * 60 - 30),
+        y: currentNode.position.y + Math.floor(Math.random() * 60 - 30),
+      };
+      const image = viewer1Images[currentIndexNodeViewer1];
+      try {
+        const planPlugin: any = viewer1Ref.current?.getPlugin(PlanPlugin);
+        planPlugin.setHotspots(
+          hotspots.concat({
+            color: 'blue',
+            id: `${currentNodeId}-new-hotspot-${Date.now()}`,
+            nodeId: currentNodeId,
+            coordinates: [randomPositionForPlan.x, randomPositionForPlan.y],
+            positionImage: { x: image.x / 2, y: planImageViewer1.height - image.y / 2 },
+          })
+        );
+      } catch (error) {
+        console.log('error', error);
+      }
 
-      // try {
-      //   if (viewer2Ref.current) {
-      //     const viewer = viewer2Ref.current;
-      //     const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
-      //     markersPlugin.removeMarker(newMarkerId);
-      //   }
-      // } catch (error: any) {
-      //   console.log(error);
-      // }
+      try {
+        const planPlugin: any = viewer2Ref.current?.getPlugin(PlanPlugin);
+        const { hotspots } = detectInformation(viewer2Images, planImageViewer2.miniHeight);
 
-      console.log(values);
+        planPlugin.setHotspots(
+          hotspots.concat({
+            color: 'blue',
+            id: `${currentNodeId}-new-hotspot-${Date.now()}`,
+            nodeId: currentNodeId,
+            coordinates: [randomPositionForPlan.x, randomPositionForPlan.y],
+            positionImage: { x: image.x / 2, y: planImageViewer2.height - image.y / 2 },
+          })
+        );
+      } catch (error) {
+        console.log('error', error);
+      }
+
       setOpen(false);
       setNewMarkerId('');
     } catch (error) {
@@ -219,108 +174,256 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
     }
   };
 
-  // init viewer 1
-  useEffect(() => {
-    if (container1Ref.current) {
-      const viewer = new Viewer({
-        container: container1Ref.current,
-        panorama: viewer1Images[0].url,
-        plugins: plugins,
-        zoomSpeed: 50,
-        navbar: ['zoom'],
+  const syncViewers = (sourceViewer: Viewer | null, targetViewer: Viewer | null) => {
+    if (!locked || !sourceViewer || !targetViewer) return;
+    try {
+      targetViewer.rotate({
+        pitch: sourceViewer.getPosition().pitch,
+        yaw: sourceViewer.getPosition().yaw,
       });
-      const { nodeMap, hotspots, hotspotsMap } = detectInformation(
-        viewer1Images,
-        floorPlanImageHeight1
-      );
+      targetViewer.zoom(sourceViewer.getZoomLevel());
+    } catch (error) {
+      console.log('error', error);
+    }
+  };
+
+  const detectInformation = useCallback((images: any[], height: number) => {
+    const nodes: any = [];
+    const hotspots: any = [];
+    const nodeMap = new Map();
+    const hotspotsMap = new Map();
+
+    images.forEach((image, imageIndex) => {
+      const currentNodeId = `node-${imageIndex}`;
+
+      // HOTSPOTS
+      hotspotsMap.set(currentNodeId, {
+        color: '#0587ff47',
+        id: currentNodeId,
+        nodeId: currentNodeId,
+        coordinates: [image.x / 2, height - image.y / 2],
+        positionImage: { x: image.x / 2, y: height - image.y / 2 },
+      });
+      image.defect.forEach((defect, index) => {
+        const currentHotspotId = `${currentNodeId}-hotspot-${index}`;
+        hotspotsMap.set(currentHotspotId, {
+          id: currentHotspotId,
+          nodeId: currentNodeId,
+          coordinates: [defect.x_loc / 2, height - defect.y_loc / 2],
+          color: defect.color,
+          size: 22,
+          positionImage: { x: image.x / 2, y: height - image.y / 2 },
+        });
+      });
+      // NODES
+      nodeMap.set(currentNodeId, {
+        id: currentNodeId,
+        panorama: image.url,
+        thumbnail: image.url,
+        name: currentNodeId,
+        caption: image.image_name,
+        markers: [
+          ...image.defect.map((defect, index) => {
+            const currentMarkerId = `${currentNodeId}-defect-marker-${index}`;
+            return {
+              data: defect,
+              id: currentMarkerId,
+              position: { yaw: defect.yaw + 'deg', pitch: defect.pitch + 'deg' },
+              image: getDefectIcon(defect.severity),
+              size: { width: 48, height: 48 },
+            };
+          }),
+          ...image.customHotspots.map((hotspot, index) => {
+            const currentHotspotId = `${currentNodeId}-hotspot-marker-${index}`;
+            return {
+              imageIndex: imageIndex,
+              id: currentHotspotId,
+              image: hotspot.icon,
+              type: 'navigate',
+              transition: index === 0 ? 'next' : 'prev',
+              position: { yaw: hotspot.yaw + 'deg', pitch: hotspot.pitch + 'deg' },
+              size: { width: 48, height: 48 },
+            };
+          }),
+        ],
+        position: { x: image.x / 2, y: height - image.y / 2 },
+      });
+    });
+
+    nodeMap.forEach(value => {
+      nodes.push(value);
+    });
+    hotspotsMap.forEach(value => {
+      hotspots.push(value);
+    });
+
+    return {
+      nodes,
+      hotspots,
+      nodeMap,
+      hotspotsMap,
+    };
+  }, []);
+
+  const firstLoadViewer = useCallback(
+    (viewer: any, images, planImageView: IPlanImage, currentIndexNode: number) => {
+      const { nodeMap, hotspots } = detectInformation(images, planImageView.miniHeight);
       const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
       const planPlugin: any = viewer.getPlugin(PlanPlugin);
-
-      // first load viewer
       viewer.zoom(0);
-      const currentNode = nodeMap.get(`node-${0}`);
+      const currentNode = nodeMap.get(`node-${currentIndexNode}`);
+      console.log(currentNode);
       currentNode.markers.forEach(marker => {
         markersPlugin.addMarker(marker);
       });
       planPlugin.setHotspots(hotspots);
       planPlugin.setCoordinates([currentNode.position.x, currentNode.position.y]);
+    },
+    []
+  );
 
-      // events
-      viewer.addEventListener('position-updated', e => {
+  const initialEvents = (
+    viewer: any,
+    images,
+    planImageView: IPlanImage,
+    positionViewer: number
+  ) => {
+    const { nodeMap, hotspotsMap } = detectInformation(images, planImageView.miniHeight);
+    const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
+    const planPlugin: any = viewer.getPlugin(PlanPlugin);
+    // events
+    viewer.addEventListener('position-updated', e => {
+      if (positionViewer === 0) {
         syncViewers(viewer1Ref.current, viewer2Ref.current);
-      });
-      viewer.addEventListener('zoom-updated', e => {
+      } else {
+        syncViewers(viewer2Ref.current, viewer1Ref.current);
+      }
+    });
+    viewer.addEventListener('zoom-updated', e => {
+      if (positionViewer === 0) {
         syncViewers(viewer1Ref.current, viewer2Ref.current);
-      });
-      viewer.addEventListener('dblclick', ({ data }) => {
-        const newDefectId = `new-defect-${Date.now()}`;
-        markersPlugin.addMarker({
-          id: newDefectId,
-          position: { yaw: data.yaw, pitch: data.pitch },
-          image: '/images/icons/new-defect.svg',
-          size: { width: 38, height: 38 },
-        });
-
-        try {
-          if (viewer2Ref.current) {
-            const markersPlugin2: any = viewer2Ref.current?.getPlugin(MarkersPlugin);
-            markersPlugin2.addMarker({
-              id: newDefectId,
-              position: { yaw: data.yaw, pitch: data.pitch },
-              image: '/images/icons/new-defect.svg',
-              size: { width: 38, height: 38 },
-            });
-          }
-        } catch (error) {
-          console.log(error);
-        }
-
-        setOpen(true);
-        setNewMarkerId(newDefectId);
+      } else {
+        syncViewers(viewer2Ref.current, viewer1Ref.current);
+      }
+    });
+    viewer.addEventListener('dblclick', e => {
+      const { data } = e;
+      const newDefectId = `new-defect-${Date.now()}`;
+      markersPlugin.addMarker({
+        id: newDefectId,
+        position: { yaw: data.yaw, pitch: data.pitch },
+        image: '/images/icons/new-defect.svg',
+        size: { width: 38, height: 38 },
       });
 
-      planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
-        const selectedHotspot = hotspotsMap.get(hotspotId);
-        console.log('selectedHotspot', selectedHotspot);
-      });
-
-      markersPlugin.addEventListener('select-marker', e => {
-        const { marker } = e;
-        const defect = marker.config.data || {};
-        if (marker.config.type === 'navigate') {
-          const isLockNext = marker.config.imageIndex === viewer1Images.length - 1;
-          const isLockPrev = marker.config.imageIndex === 0;
-          switch (marker.config.transition) {
-            case 'next':
-              if (isLockNext) return;
-              const nextNode = nodeMap.get(`node-${marker.config.imageIndex + 1}`);
-              markersPlugin.clearMarkers();
-              viewer.setPanorama(nextNode.panorama);
-              nextNode.markers.forEach(marker => {
-                markersPlugin.addMarker(marker);
-              });
-              planPlugin.setCoordinates([nextNode.position.x, nextNode.position.y]);
-              return;
-            case 'prev':
-              if (isLockPrev) return;
-              const prevNode = nodeMap.get(`node-${marker.config.imageIndex - 1}`);
-              markersPlugin.clearMarkers();
-              viewer.setPanorama(prevNode.panorama);
-              prevNode.markers.forEach(marker => {
-                markersPlugin.addMarker(marker);
-              });
-              planPlugin.setCoordinates([prevNode.position.x, prevNode.position.y]);
-              return;
-          }
-        } else {
-          modal.info({
-            width: 800,
-            centered: true,
-            title: `Defect ${defect.defect_id_elevation}`,
-            content: <DefectDetail defect={defect} />,
+      try {
+        if (viewer2Ref.current) {
+          const markersPlugin2: any = viewer2Ref.current?.getPlugin(MarkersPlugin);
+          markersPlugin2.addMarker({
+            id: newDefectId,
+            position: { yaw: data.yaw, pitch: data.pitch },
+            image: '/images/icons/new-defect.svg',
+            size: { width: 38, height: 38 },
           });
         }
+      } catch (error) {
+        console.log(error);
+      }
+
+      setOpen(true);
+      setNewMarkerId(newDefectId);
+    });
+
+    planPlugin.addEventListener('select-hotspot', ({ hotspotId }) => {
+      try {
+        const selectedHotspot = hotspotsMap.get(hotspotId);
+        const nextNode = nodeMap.get(selectedHotspot.nodeId);
+        markersPlugin.clearMarkers();
+        viewer.setPanorama(nextNode.panorama);
+        nextNode.markers.forEach(marker => {
+          markersPlugin.addMarker(marker);
+        });
+        planPlugin.setCoordinates([
+          selectedHotspot.positionImage.x,
+          selectedHotspot.positionImage.y,
+        ]);
+        if (positionViewer === 0) {
+          toggleLock(false);
+          setCurrentIndexNodeViewer1(selectedHotspot.nodeId.split('-')[1]);
+        } else {
+          toggleLock(false);
+          setCurrentIndexNodeViewer2(selectedHotspot.nodeId.split('-')[1]);
+        }
+      } catch (error) {
+        console.log('error', error);
+      }
+    });
+
+    markersPlugin.addEventListener('select-marker', e => {
+      const { marker } = e;
+      const defect = marker.config.data || {};
+      if (marker.config.type === 'navigate') {
+        const isLockNext = marker.config.imageIndex === viewer1Images.length - 1;
+        const isLockPrev = marker.config.imageIndex === 0;
+        switch (marker.config.transition) {
+          case 'next':
+            if (isLockNext) return;
+            const nextIndex = marker.config.imageIndex + 1;
+            const nextNode = nodeMap.get(`node-${nextIndex}`);
+            markersPlugin.clearMarkers();
+            viewer.setPanorama(nextNode.panorama);
+            nextNode.markers.forEach(marker => {
+              markersPlugin.addMarker(marker);
+            });
+            planPlugin.setCoordinates([nextNode.position.x, nextNode.position.y]);
+            if (positionViewer === 0) {
+              setCurrentIndexNodeViewer1(nextIndex);
+            } else {
+              setCurrentIndexNodeViewer2(nextIndex);
+            }
+            toggleLock(false);
+            return;
+          case 'prev':
+            if (isLockPrev) return;
+            const prevIndex = marker.config.imageIndex - 1;
+            const prevNode = nodeMap.get(`node-${prevIndex}`);
+            markersPlugin.clearMarkers();
+            viewer.setPanorama(prevNode.panorama);
+            prevNode.markers.forEach(marker => {
+              markersPlugin.addMarker(marker);
+            });
+            planPlugin.setCoordinates([prevNode.position.x, prevNode.position.y]);
+            if (positionViewer === 0) {
+              setCurrentIndexNodeViewer1(prevIndex);
+            } else {
+              setCurrentIndexNodeViewer2(prevIndex);
+            }
+            toggleLock(false);
+            return;
+        }
+      } else {
+        modal.info({
+          width: 800,
+          centered: true,
+          title: `Defect ${defect.defect_id_elevation}`,
+          content: <DefectDetail defect={defect} />,
+        });
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (container1Ref.current) {
+      const viewer = new Viewer({
+        container: container1Ref.current,
+        panorama: viewer1Images[currentIndexNodeViewer1].url,
+        plugins: getPlugins(planImageViewer1),
+        zoomSpeed: 50,
+        navbar: ['zoom'],
       });
+
+      firstLoadViewer(viewer, viewer1Images, planImageViewer1, currentIndexNodeViewer1);
+      initialEvents(viewer, viewer1Images, planImageViewer1, 0);
 
       viewer1Ref.current = viewer;
     }
@@ -333,99 +436,19 @@ const SyncView = ({ locked, isCompare, data, toggleLock }) => {
     };
   }, [viewer1Images, locked]);
 
-  // init viewer 2
   useEffect(() => {
     if (isCompare) {
-      // TODO: copy functions and configs from viewer 1 to viewer 2
       if (container2Ref.current) {
         const viewer = new Viewer({
           container: container2Ref.current,
-          panorama: viewer2Images[0].url,
-          plugins: plugins,
+          panorama: viewer2Images[currentIndexNodeViewer2].url,
+          plugins: getPlugins(planImageViewer2),
           zoomSpeed: 50,
-        });
-        const { nodeMap, hotspots } = detectInformation(viewer2Images, floorPlanImageHeight2);
-        const markersPlugin: any = viewer.getPlugin(MarkersPlugin);
-        const planPlugin: any = viewer.getPlugin(PlanPlugin);
-        const map = planPlugin.getLeaflet();
-        // configs
-        viewer.zoom(0);
-        const currentNode = nodeMap.get(`node-${0}`);
-        currentNode.markers.forEach(marker => {
-          markersPlugin.addMarker(marker);
-        });
-        planPlugin.setHotspots(hotspots);
-        planPlugin.setCoordinates([currentNode.position.x, currentNode.position.y]);
-
-        viewer.addEventListener('position-updated', e => {
-          syncViewers(viewer2Ref.current, viewer1Ref.current);
-        });
-        viewer.addEventListener('zoom-updated', e => {
-          syncViewers(viewer2Ref.current, viewer1Ref.current);
-        });
-        viewer.addEventListener('dblclick', ({ data }) => {
-          const newDefectId = `new-defect-${Date.now()}`;
-          markersPlugin.addMarker({
-            id: newDefectId,
-            position: { yaw: data.yaw, pitch: data.pitch },
-            image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
-            size: { width: 38, height: 38 },
-          });
-
-          try {
-            if (viewer1Ref.current) {
-              const markersPlugin2: any = viewer1Ref.current?.getPlugin(MarkersPlugin);
-              markersPlugin2.addMarker({
-                id: newDefectId,
-                position: { yaw: data.yaw, pitch: data.pitch },
-                image: 'https://photo-sphere-viewer-data.netlify.app/assets/pictos/pin-blue.png',
-                size: { width: 38, height: 38 },
-              });
-            }
-          } catch (error) {
-            console.log(error);
-          }
-
-          setOpen(true);
-          setNewMarkerId(newDefectId);
+          navbar: ['zoom'],
         });
 
-        markersPlugin.addEventListener('select-marker', e => {
-          const { marker } = e;
-          const defect = marker.config.data || {};
-          if (marker.config.type === 'navigate') {
-            const isLockNext = marker.config.imageIndex === viewer2Images.length - 1;
-            const isLockPrev = marker.config.imageIndex === 0;
-            switch (marker.config.transition) {
-              case 'next':
-                if (isLockNext) return;
-                const nextNode = nodeMap.get(`node-${marker.config.imageIndex + 1}`);
-                markersPlugin.clearMarkers();
-                viewer.setPanorama(nextNode.panorama);
-                nextNode.markers.forEach(marker => {
-                  markersPlugin.addMarker(marker);
-                });
-                return;
-              case 'prev':
-                if (isLockPrev) return;
-                const prevNode = nodeMap.get(`node-${marker.config.imageIndex - 1}`);
-                markersPlugin.clearMarkers();
-                viewer.setPanorama(prevNode.panorama);
-                prevNode.markers.forEach(marker => {
-                  markersPlugin.addMarker(marker);
-                });
-                return;
-            }
-          } else {
-            modal.info({
-              width: 800,
-              centered: true,
-              title: `Defect ${defect.defect_id_elevation}`,
-              content: <DefectDetail defect={defect} />,
-            });
-          }
-        });
-
+        firstLoadViewer(viewer, viewer2Images, planImageViewer2, currentIndexNodeViewer2);
+        initialEvents(viewer, viewer2Images, planImageViewer2, 1);
         viewer2Ref.current = viewer;
       }
 
